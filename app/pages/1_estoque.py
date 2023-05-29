@@ -1,93 +1,202 @@
+import pandas as pd
 import sqlite3
 import streamlit as st
-import pandas as pd
+from streamlit_modal import Modal
+from streamlit_extras.dataframe_explorer import dataframe_explorer
+import openpyxl
+import re
 
+st.set_page_config(layout="wide")
+tabelas = []  # Lista para armazenar os nomes das tabelas
 
-# Function to create a SQLite database and table
-def create_table():
+def formatar_nome_tabela(nome_arquivo):
+    nome_arquivo = re.sub(r'\W+', '_', nome_arquivo)  # Substitui caracteres não alfanuméricos por underscores
+    nome_arquivo = nome_arquivo.lower()  # Converte para minúsculas
+    return nome_arquivo
+
+def ler_excel_criar_db(nome_arquivo):
+    # Extrair o nome do arquivo sem a extensão
+    nome_tabela = formatar_nome_tabela(nome_arquivo.name.split('.')[0])
+
+    # Ler o arquivo Excel
+    df = pd.read_excel(nome_arquivo, engine='openpyxl')
+
+    # Conectar ao banco de dados SQLite3
     conn = sqlite3.connect("excel_data.db")
     cursor = conn.cursor()
 
-    # Create a table to store Excel data
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS excel_tables (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            table_name TEXT,
-            data BLOB
-        )
-    """)
+    # Criar tabela no banco de dados
+    df.to_sql(nome_tabela, conn, if_exists='replace', index=False)
 
+    # Adicionar o nome da tabela à lista de tabelas
+    tabelas.append(nome_tabela)
+
+    # Fechar a conexão com o banco de dados
+    conn.close()
+
+    return df
+
+def obter_todas_as_tabelas():
+    # Conectar ao banco de dados SQLite3
+    conn = sqlite3.connect("excel_data.db")
+
+    # Consultar as tabelas no banco de dados
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' and name is not 'sqlite_sequence' ")
+    tabelas = cursor.fetchall()
+
+    # Fechar a conexão com o banco de dados
+    conn.close()
+
+    # Retornar uma lista de nomes de tabelas
+    return [tabela[0] for tabela in tabelas]
+
+def inserir_dados(nome_tabela, dados):
+    # Conectar ao banco de dados SQLite3
+    conn = sqlite3.connect("excel_data.db")
+    cursor = conn.cursor()
+
+    # Inserir os dados na tabela
+    cursor.executemany(f"INSERT INTO {nome_tabela} VALUES ({', '.join(['?'] * len(dados[0]))})", dados)
+
+    # Commit as alterações
     conn.commit()
+
+    # Fechar a conexão com o banco de dados
     conn.close()
 
-
-# Function to save Excel tables to SQLite database
-def save_excel_tables(file):
+def atualizar_dados(nome_tabela, coluna_atualizar, valor_atualizar, coluna_condicao, valor_condicao):
+    # Conectar ao banco de dados SQLite3
     conn = sqlite3.connect("excel_data.db")
     cursor = conn.cursor()
 
-    # Read Excel file and store each table in the database
-    excel_data = pd.read_excel(file, sheet_name=None)
-    for sheet_name, df in excel_data.items():
-        # Convert dataframe to binary format
-        df_binary = df.to_pickle(None)
-        df_bytes = df_binary.to_bytes()
+    # Atualizar os dados na tabela
+    cursor.execute(f"UPDATE {nome_tabela} SET {coluna_atualizar} = ? WHERE {coluna_condicao} = ?", (valor_atualizar, valor_condicao))
 
-        # Save table to the database
-        cursor.execute("""
-            INSERT INTO excel_tables (table_name, data)
-            VALUES (?, ?)
-        """, (sheet_name, df_bytes))
-
+    # Commit as alterações
     conn.commit()
+
+    # Fechar a conexão com o banco de dados
     conn.close()
 
-
-# Function to retrieve Excel tables from SQLite database
-def get_excel_tables():
+def remover_dados(nome_tabela, coluna_condicao, valor_condicao):
+    # Conectar ao banco de dados SQLite3
     conn = sqlite3.connect("excel_data.db")
     cursor = conn.cursor()
 
-    # Retrieve all tables from the database
-    cursor.execute("""
-        SELECT table_name, data
-        FROM excel_tables
-    """)
-    results = cursor.fetchall()
+    # Remover os dados da tabela
+    cursor.execute(f"DELETE FROM {nome_tabela} WHERE {coluna_condicao} = ?", (valor_condicao,))
 
+    # Commit as alterações
+    conn.commit()
+
+    # Fechar a conexão com o banco de dados
+    conn.close()
+    
+def remover_tabela(nome_tabela):
+    # Conectar ao banco de dados SQLite3
+    conn = sqlite3.connect("excel_data.db")
+    cursor = conn.cursor()
+
+    # Remover os dados da tabela
+    cursor.execute(f"DROP TABLE {nome_tabela}")
+
+    # Commit as alterações
+    conn.commit()
+
+    # Fechar a conexão com o banco de dados
     conn.close()
 
-    # Convert binary data back to dataframes
-    tables = []
-    for table_name, data in results:
-        df_bytes = pd.read_pickle(data)
-        df = pd.read_pickle(df_bytes)
-        tables.append((table_name, df))
+def expander_dml(key,tabela, df):
+    with st.expander("Inserir/Atualizar/Deletar Registros"):
+        operacao = st.selectbox("Operação:", ["Inserir", "Atualizar", "Deletar", "Deletar Tabela"], key=f"operacao_{key}")
 
-    return tables
+        if operacao == "Inserir":
+            st.subheader("Inserir Registros")
+            form = st.form(key=f"form_inserir_{key}")
+            dados = {}
+            for coluna in df.columns:
+                valor = form.text_input(coluna)
+                dados[coluna] = valor
+            if form.form_submit_button("Inserir Registros"):
+                inserir_dados(tabela, [tuple(dados.values())])
+                st.success("Registros inseridos com sucesso!")
 
+        elif operacao == "Atualizar":
+            st.subheader("Atualizar Registros")
+            form = st.form(key=f"form_atualizar_{key}")
+            coluna_atualizar = form.selectbox("Coluna a ser atualizada:", df.columns)
+            valor_atualizar = form.text_input("Novo valor")
+            coluna_condicao = form.selectbox("Coluna de condição:", df.columns)
+            valor_condicao = form.text_input("Valor de condição")
+            if form.form_submit_button("Atualizar Registros"):
+                atualizar_dados(tabela, coluna_atualizar, valor_atualizar, coluna_condicao, valor_condicao)
+                st.success("Registros atualizados com sucesso!")
 
-# Streamlit app
+        elif operacao == "Deletar":
+            st.subheader("Deletar Registros")
+            form = st.form(key=f"form_deletar_{key}")
+            coluna_condicao = form.selectbox("Coluna de condição:", df.columns)
+            valor_condicao = form.text_input("Valor de condição")
+            if form.form_submit_button("Deletar Registros"):
+                remover_dados(tabela, coluna_condicao, valor_condicao)
+                st.success("Registros deletados com sucesso!")
+                
+        elif operacao == "Deletar Tabela":
+            st.subheader("Deletar Tabela")
+            form = st.form(key=f"form_drop_table_{key}")
+            if form.form_submit_button("Deletar Tabela"):
+                remover_tabela(tabela)
+                st.success("Tabela deletada com sucesso!")
+
+def plotar_tabelas(dml_on = False):
+    # Obter todas as tabelas existentes
+    todas_as_tabelas = obter_todas_as_tabelas()
+
+    # Dividir a página em colunas
+    num_colunas = len(todas_as_tabelas)
+    colunas = st.columns(num_colunas)
+
+    for i, tabela in enumerate(todas_as_tabelas):
+    #     with colunas[i]:
+        st.subheader(tabela)
+        # Conectar ao banco de dados SQLite3
+        conn = sqlite3.connect("excel_data.db")
+
+        # Consultar os dados da tabela
+        df = pd.read_sql_query(f"SELECT * FROM {tabela}", conn)
+        # filtered_df = dataframe_explorer(df, case=False)
+        # st.dataframe(filtered_df, use_container_width=True)
+        # st.dataframe(df) # Mostrar a tabela no Streamlit
+        st.table(df) # Mostrar a tabela no Streamlit
+
+        if dml_on:
+            expander_dml(key=f"expander_{tabela}", tabela=tabela, df=df)
+
+       # C
+                            
+        # Fechar a conexão com o banco de dados
+    conn.close()
+
 def main():
-    st.title("Excel File Viewer")
+    # Título da página
+    st.title('Exemplo de Tabela')
+        
+    # Upload do arquivo Excel
+    arquivo_excel = st.file_uploader('Selecione o arquivo Excel', type=['xlsx'])
+    if arquivo_excel is not None:
+        # Ler o arquivo Excel e criar o banco de dados
+        df = ler_excel_criar_db(arquivo_excel)
 
-    # Create the database table if it doesn't exist
-    create_table()
+        # Plotar a tabela
+        # plotar_tabelas()
 
-    # File upload section
-    st.subheader("Upload Excel File")
-    file = st.file_uploader("Select an Excel file", type=["xlsx"])
-
-    if file is not None:
-        # Save the uploaded Excel file
-        save_excel_tables(file)
-
-        # Display the uploaded tables
-        tables = get_excel_tables()
-        for table_name, df in tables:
-            st.subheader(f"Table: {table_name}")
-            st.dataframe(df)
+    # # Botão para criar nova tabela
+    # if st.button("Criar nova tabela"):
+    # Plotar todas as tabelas existentes
+    plotar_tabelas(dml_on=True)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
+
