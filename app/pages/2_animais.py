@@ -93,12 +93,12 @@ def main():
                if vaccine:
                     options = set()
                     for v in vaccine:
-                        option = f'{v[0]} - {v[1]}'
+                        option = f'{v[1]}'
                         options.add(option)
                     options = list(options)  # Converter o conjunto de volta para uma lista
                     selected_vaccine = st.selectbox('Selecione o animal', options)
-                    id = selected_vaccine.split('-')[0].strip()
-                    result = search_animal_vaccine(id)
+                    name = selected_vaccine.split('-')[0].strip()
+                    result = search_animal_vaccine(name)
                     df_final = pd.DataFrame(result, columns=['Id', 'Nome', 'Vacina'])
                     st.table(df_final)
 
@@ -163,7 +163,7 @@ def search_animal_id(id):
     return c.fetchall()
 
 def search_animal_vaccine(vaccine):
-    c.execute('SELECT p.id, p.name, v.name FROM pets p INNER JOIN vaccine v ON p.id = v.idPets WHERE v.id = ?',(vaccine,))
+    c.execute('SELECT p.id, p.name, v.name FROM pets p INNER JOIN vaccine v ON p.id = v.idPets WHERE v.name = ?',(vaccine,))
     return c.fetchall()
 
 def read_vaccine():
