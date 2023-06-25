@@ -31,3 +31,34 @@ def sidebar_bg(side_bg):
    
 side_bg = 'app/img/logo.png'
 sidebar_bg(side_bg)
+
+from streamlit_extras.altex import line_chart, get_stocks_data
+import streamlit as st
+
+st.title('Previsões futuras')
+
+stocks = get_stocks_data()
+line_chart(
+    data=stocks.query("symbol == 'GOOG'"),
+    x="date",
+    y="price",
+    title="Animais 2023",
+)
+line_chart(
+    data=stocks.query("symbol == 'AAPL'"),
+    x="date",
+    y="price",
+    title="Ração 2023",
+)
+line_chart(
+    data=stocks.query("symbol == 'AAPL'"),
+    x="date",
+    y="price",
+    title="Gastos gerais 2023",
+)
+line_chart(
+    data=stocks.query("symbol == 'AAPL'"),
+    x="date",
+    y="price",
+    title="Lucro esparado 2023",
+)
