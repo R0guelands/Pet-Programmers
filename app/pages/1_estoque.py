@@ -1,13 +1,44 @@
 import pandas as pd
 import sqlite3
 import streamlit as st
-from streamlit_modal import Modal
 from streamlit_extras.dataframe_explorer import dataframe_explorer
 import openpyxl
 import re
+import base64
 
-st.set_page_config(layout="wide")
 tabelas = []  # Lista para armazenar os nomes das tabelas
+
+
+def sidebar_bg(side_bg):
+
+   side_bg_ext = 'png'
+
+   st.markdown(
+      f"""
+      <style>
+      [data-testid="stSidebar"] > div:first-child {{
+        background: url(data:image/{side_bg_ext};base64,{base64.b64encode(open(side_bg, "rb").read()).decode()});
+        background-repeat: no-repeat;
+        background-repeat: no-repeat;
+        background-size: 131px;
+        background-position: 50% 0%;
+        padding-top: 0px;
+      }}
+      [data-testid="stSidebarNav"]::before {{
+                content: "";
+                margin-left: 20px;
+                margin-top: 20px;
+                font-size: 30px;
+                position: relative;
+                top: 100px;
+            }}
+      </style>
+      """,
+      unsafe_allow_html=True,
+      )
+   
+side_bg = 'app/img/logo.png'
+sidebar_bg(side_bg)
 
 def formatar_nome_tabela(nome_arquivo):
     nome_arquivo = re.sub(r'\W+', '_', nome_arquivo)  # Substitui caracteres não alfanuméricos por underscores
@@ -180,7 +211,7 @@ def plotar_tabelas(dml_on = False):
 
 def main():
     # Título da página
-    st.title('Exemplo de Tabela')
+    st.title('Planilhas Estoques')
         
     # Upload do arquivo Excel
     arquivo_excel = st.file_uploader('Selecione o arquivo Excel', type=['xlsx'])
