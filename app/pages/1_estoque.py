@@ -183,31 +183,32 @@ def expander_dml(key,tabela, df):
 def plotar_tabelas(dml_on = False):
     # Obter todas as tabelas existentes
     todas_as_tabelas = obter_todas_as_tabelas()
+    if todas_as_tabelas:
+        # Dividir a página em colunas
+        num_colunas = len(todas_as_tabelas)
+        colunas = st.columns(num_colunas)
 
-    # Dividir a página em colunas
-    num_colunas = len(todas_as_tabelas)
-    colunas = st.columns(num_colunas)
+        for i, tabela in enumerate(todas_as_tabelas):
+        #     with colunas[i]:
+            st.subheader(tabela)
+            # Conectar ao banco de dados SQLite3
+            conn = sqlite3.connect("excel_data.db")
 
-    for i, tabela in enumerate(todas_as_tabelas):
-    #     with colunas[i]:
-        st.subheader(tabela)
-        # Conectar ao banco de dados SQLite3
-        conn = sqlite3.connect("excel_data.db")
+            with st.expander(f"{tabela}"):
+                # Consultar os dados da tabela
+                df = pd.read_sql_query(f"SELECT * FROM {tabela}", conn)
+                # filtered_df = dataframe_explorer(df, case=False)
+                # st.dataframe(filtered_df, use_container_width=True)
+                # st.dataframe(df) # Mostrar a tabela no Streamlit
+                st.table(df) # Mostrar a tabela no Streamlit
 
-        # Consultar os dados da tabela
-        df = pd.read_sql_query(f"SELECT * FROM {tabela}", conn)
-        # filtered_df = dataframe_explorer(df, case=False)
-        # st.dataframe(filtered_df, use_container_width=True)
-        # st.dataframe(df) # Mostrar a tabela no Streamlit
-        st.table(df) # Mostrar a tabela no Streamlit
+            if dml_on:
+                expander_dml(key=f"expander_{tabela}", tabela=tabela, df=df)
 
-        if dml_on:
-            expander_dml(key=f"expander_{tabela}", tabela=tabela, df=df)
-
-       # C
-                            
-        # Fechar a conexão com o banco de dados
-    conn.close()
+        # C
+                                
+            # Fechar a conexão com o banco de dados
+        conn.close()
 
 def main():
     # Título da página
